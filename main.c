@@ -112,7 +112,6 @@ int main(void)
 {
 
     initialization();
-    /* Halting WDT and disabling master interrupts */
 
 
     while(1)

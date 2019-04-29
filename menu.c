@@ -9,13 +9,16 @@
 
 #include "ButtonLED_HAL.h"
 
+#define milsec 60000
+
 typedef enum {FFT,metronome,note_detection} options;
 
 button_t BoostS1 = {GPIO_PORT_P5, GPIO_PIN1, Stable_R, RELEASED_STATE, TIMER32_0_BASE};
 button_t BoostS2 = {GPIO_PORT_P3, GPIO_PIN5, Stable_R, RELEASED_STATE, TIMER32_1_BASE};
-button_t LaunchL = {GPIO_PORT_P1, GPIO_PIN1, Stable_R, RELEASED_STATE, TIMER32_1_BASE};
+button_t LaunchL = {GPIO_PORT_P1, GPIO_PIN1, Stable_R, RELEASED_STATE, TIMER32_0_BASE};
 button_t LaunchR = {GPIO_PORT_P1, GPIO_PIN4, Stable_R, RELEASED_STATE, TIMER32_1_BASE};
 
+void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed);
 
 void menu()
 {
@@ -31,7 +34,6 @@ void menu()
     LaunchL_Pressed = ButtonPushed(&LaunchL);
     LaunchR_Pressed = ButtonPushed(&LaunchR);
 
-
     switch(option)
     {
         case FFT:
@@ -42,7 +44,7 @@ void menu()
             {
                 option = metronome;
             }
-            if(LaunchR_Pressed)
+            else if(LaunchR_Pressed)
             {
                 option = note_detection;
             }
@@ -51,15 +53,15 @@ void menu()
             turnOff_BoosterpackLED_red();
             turnOff_BoosterpackLED_green();
             turnOn_BoosterpackLED_blue();
+            metronome_play(Booster1_Pressed, Booster2_Pressed);
             if(LaunchL_Pressed)
             {
                 option = note_detection;
             }
-            if(LaunchR_Pressed)
+            else if(LaunchR_Pressed)
             {
                 option = FFT;
             }
-
             break;
         case note_detection:
             turnOff_BoosterpackLED_red();
@@ -69,12 +71,25 @@ void menu()
             {
                 option = FFT;
             }
-            if(LaunchR_Pressed)
+            else if(LaunchR_Pressed)
             {
                 option = metronome;
             }
-
             break;
     }
 }
 
+void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
+{
+    turnOn_LaunchpadLED2_green();
+    static int BPM = 100;
+
+    if(Booster1_Pressed)
+    {
+        BPM = BPM + 10;
+    }
+    else if(Booster2_Pressed)
+    {
+        BPM = BPM - 10;
+    }
+}

@@ -105,251 +105,20 @@ Timer_A_PWMConfig pwmConfig =
 
 void menu();
 void initialization();
+void FFT();
 
 int main(void)
+
 {
+
     initialization();
     /* Halting WDT and disabling master interrupts */
-    MAP_WDT_A_holdTimer();
-    MAP_Interrupt_disableMaster();
 
-    /* Set the core voltage level to VCORE1 */
-    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);
-
-    /* Set 2 flash wait states for Flash bank 0 and 1*/
-    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
-    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
-
-    /* Initializes Clock System */
-    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
-    MAP_CS_initClockSignal(CS_MCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_HSMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_ACLK, CS_REFOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-
-    /* Initializes display */
-    Crystalfontz128x128_Init();
-
-    /* Set default screen orientation */
-    Crystalfontz128x128_SetOrientation(LCD_ORIENTATION_UP);
-
-    /* Initializes graphics context */
-    Graphics_initContext(&g_sContext, &g_sCrystalfontz128x128,
-                         &g_sCrystalfontz128x128_funcs);
-
-    /* Draw Title, x-axis, gradation & labels */
-    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
-    Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-    GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
-    Graphics_clearDisplay(&g_sContext);
-    Graphics_drawLineH(&g_sContext, 0, 127, 115);
-    Graphics_drawLineV(&g_sContext, 0, 115, 117);
-    Graphics_drawLineV(&g_sContext, 16, 115, 116);
-    Graphics_drawLineV(&g_sContext, 31, 115, 117);
-    Graphics_drawLineV(&g_sContext, 32, 115, 117);
-    Graphics_drawLineV(&g_sContext, 48, 115, 116);
-    Graphics_drawLineV(&g_sContext, 63, 115, 117);
-    Graphics_drawLineV(&g_sContext, 64, 115, 117);
-    Graphics_drawLineV(&g_sContext, 80, 115, 116);
-    Graphics_drawLineV(&g_sContext, 95, 115, 117);
-    Graphics_drawLineV(&g_sContext, 96, 115, 117);
-    Graphics_drawLineV(&g_sContext, 112, 115, 116);
-    Graphics_drawLineV(&g_sContext, 127, 115, 117);
-
-    Graphics_drawStringCentered(&g_sContext,
-                                (int8_t *)"512-Point FFT",
-                                AUTO_STRING_LENGTH,
-                                64,
-                                6,
-                                OPAQUE_TEXT);
-    Graphics_drawStringCentered(&g_sContext,
-                                (int8_t *)"0",
-                                AUTO_STRING_LENGTH,
-                                4,
-                                122,
-                                OPAQUE_TEXT);
-    Graphics_drawStringCentered(&g_sContext,
-                                (int8_t *)"1",
-                                AUTO_STRING_LENGTH,
-                                32,
-                                122,
-                                OPAQUE_TEXT);
-    Graphics_drawStringCentered(&g_sContext,
-                                (int8_t *)"2",
-                                AUTO_STRING_LENGTH,
-                                64,
-                                122,
-                                OPAQUE_TEXT);
-    Graphics_drawStringCentered(&g_sContext,
-                                (int8_t *)"3",
-                                AUTO_STRING_LENGTH,
-                                96,
-                                122,
-                                OPAQUE_TEXT);
-    Graphics_drawStringCentered(&g_sContext,
-                                (int8_t *)"4",
-                                AUTO_STRING_LENGTH,
-                                125,
-                                122,
-                                OPAQUE_TEXT);
-    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_RED);
-    Graphics_drawStringCentered(&g_sContext,
-                                (int8_t *)"kHz",
-                                AUTO_STRING_LENGTH,
-                                112,
-                                122,
-                                OPAQUE_TEXT);
-
-    // Initialize Hann Window
-    int n;
-    for(n = 0; n < SAMPLE_LENGTH; n++)
-    {
-        hann[n] = 0.5f - 0.5f * cosf((2 * PI * n) / (SAMPLE_LENGTH - 1));
-    }
-
-    /* Configuring Timer_A to have a period of approximately 500ms and
-     * an initial duty cycle of 10% of that (3200 ticks)  */
-    Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
-
-    /* Initializing ADC (MCLK/1/1) */
-    ADC14_enableModule();
-    ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_1, 0);
-
-    ADC14_setSampleHoldTrigger(ADC_TRIGGER_SOURCE1, false);
-
-    /* Configuring GPIOs (4.3 A10) */
-    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
-                                               GPIO_TERTIARY_MODULE_FUNCTION);
-
-    /* Configuring ADC Memory */
-    ADC14_configureSingleSampleMode(ADC_MEM0, true);
-    ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS,
-                                    ADC_INPUT_A10, false);
-
-    /* Set ADC result format to signed binary */
-    ADC14_setResultFormat(ADC_SIGNED_BINARY);
-
-    /* Configuring DMA module */
-    DMA_enableModule();
-    DMA_setControlBase(MSP_EXP432P401RLP_DMAControlTable);
-
-    DMA_disableChannelAttribute(DMA_CH7_ADC14,
-                                UDMA_ATTR_ALTSELECT | UDMA_ATTR_USEBURST |
-                                UDMA_ATTR_HIGH_PRIORITY |
-                                UDMA_ATTR_REQMASK);
-
-    /* Setting Control Indexes. In this case we will set the source of the
-     * DMA transfer to ADC14 Memory 0
-     *  and the destination to the
-     * destination data array. */
-    MAP_DMA_setChannelControl(
-        UDMA_PRI_SELECT | DMA_CH7_ADC14,
-        UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
-        UDMA_DST_INC_16 | UDMA_ARB_1);
-    MAP_DMA_setChannelTransfer(UDMA_PRI_SELECT | DMA_CH7_ADC14,
-                               UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
-                               data_array1, SAMPLE_LENGTH);
-
-    MAP_DMA_setChannelControl(
-        UDMA_ALT_SELECT | DMA_CH7_ADC14,
-        UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
-        UDMA_DST_INC_16 | UDMA_ARB_1);
-    MAP_DMA_setChannelTransfer(UDMA_ALT_SELECT | DMA_CH7_ADC14,
-                               UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
-                               data_array2, SAMPLE_LENGTH);
-
-    /* Assigning/Enabling Interrupts */
-    MAP_DMA_assignInterrupt(DMA_INT1, 7);
-    MAP_Interrupt_enableInterrupt(INT_DMA_INT1);
-    MAP_DMA_assignChannel(DMA_CH7_ADC14);
-    MAP_DMA_clearInterruptFlag(7);
-    MAP_Interrupt_enableMaster();
-
-    /* Now that the DMA is primed and setup, enabling the channels. The ADC14
-     * hardware should take over and transfer/receive all bytes */
-    MAP_DMA_enableChannel(7);
-    MAP_ADC14_enableConversion();
 
     while(1)
     {
         menu();
-        //MAP_PCM_gotoLPM0();
-
-        //int i = 0;
-
-        /* Computer real FFT using the completed data buffer */
-        /*if(switch_data & 1)
-        {
-            for(i = 0; i < 512; i++)
-            {
-                data_array1[i] = (int16_t)(hann[i] * data_array1[i]);
-            }
-            arm_rfft_instance_q15 instance;
-            status = arm_rfft_init_q15(&instance, fftSize, ifftFlag,
-                                       doBitReverse);
-
-            arm_rfft_q15(&instance, data_array1, data_input);
-        }
-        else
-        {
-            for(i = 0; i < 512; i++)
-            {
-                data_array2[i] = (int16_t)(hann[i] * data_array2[i]);
-            }
-            arm_rfft_instance_q15 instance;
-            status = arm_rfft_init_q15(&instance, fftSize, ifftFlag,
-                                       doBitReverse);
-
-            arm_rfft_q15(&instance, data_array2, data_input);
-        }*/
-
-        /* Calculate magnitude of FFT complex output */
-        /*for(i = 0; i < 1024; i += 2)
-        {
-            data_output[i /
-                        2] =
-                (int32_t)(sqrtf((data_input[i] *
-                                 data_input[i]) +
-                                (data_input[i + 1] * data_input[i + 1])));
-        }
-
-        q15_t maxValue;
-        uint32_t maxIndex = 0;
-
-        arm_max_q15(data_output, fftSize, &maxValue, &maxIndex);
-
-        if(maxIndex <= 64)
-        {
-            color = ((uint32_t)(0xFF * (maxIndex / 64.0f)) << 8) + 0xFF;
-        }
-        else if(maxIndex <= 128)
-        {
-            color =
-                (0xFF - (uint32_t)(0xFF * ((maxIndex - 64) / 64.0f))) + 0xFF00;
-        }
-        else if(maxIndex <= 192)
-        {
-            color =
-                ((uint32_t)(0xFF * ((maxIndex - 128) / 64.0f)) << 16) + 0xFF00;
-        }
-        else
-        {
-            color =
-                ((0xFF -
-                  (uint32_t)(0xFF *
-                             ((maxIndex - 192) / 64.0f))) << 8) + 0xFF0000;
-        }*/
-
-        /* Draw frequency bin graph */
-        /*for(i = 0; i < 256; i += 2)
-        {
-            int x = min(100, (int)((data_output[i] + data_output[i + 1]) / 8));
-
-            Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-            Graphics_drawLineV(&g_sContext, i / 2, 114 - x, 14);
-            Graphics_setForegroundColor(&g_sContext, color);
-            Graphics_drawLineV(&g_sContext, i / 2, 114, 114 - x);
-        }*/
+        FFT();
     }
 }
 
@@ -381,9 +150,271 @@ void DMA_INT1_IRQHandler(void)
     }
 }
 
+void FFT()
+{
+    MAP_PCM_gotoLPM0();
+
+    int i = 0;
+
+    /* Computer real FFT using the completed data buffer */
+    if(switch_data & 1)
+    {
+        for(i = 0; i < 512; i++)
+        {
+            data_array1[i] = (int16_t)(hann[i] * data_array1[i]);
+        }
+        arm_rfft_instance_q15 instance;
+        status = arm_rfft_init_q15(&instance, fftSize, ifftFlag,
+                                   doBitReverse);
+
+        arm_rfft_q15(&instance, data_array1, data_input);
+    }
+    else
+    {
+        for(i = 0; i < 512; i++)
+        {
+            data_array2[i] = (int16_t)(hann[i] * data_array2[i]);
+        }
+        arm_rfft_instance_q15 instance;
+        status = arm_rfft_init_q15(&instance, fftSize, ifftFlag,
+                                   doBitReverse);
+
+        arm_rfft_q15(&instance, data_array2, data_input);
+    }
+
+    /* Calculate magnitude of FFT complex output */
+    for(i = 0; i < 1024; i += 2)
+    {
+        data_output[i /
+                    2] =
+            (int32_t)(sqrtf((data_input[i] *
+                             data_input[i]) +
+                            (data_input[i + 1] * data_input[i + 1])));
+    }
+
+    q15_t maxValue;
+    uint32_t maxIndex = 0;
+
+    arm_max_q15(data_output, fftSize, &maxValue, &maxIndex);
+
+    if(maxIndex <= 64)
+    {
+        color = ((uint32_t)(0xFF * (maxIndex / 64.0f)) << 8) + 0xFF;
+    }
+    else if(maxIndex <= 128)
+    {
+        color =
+            (0xFF - (uint32_t)(0xFF * ((maxIndex - 64) / 64.0f))) + 0xFF00;
+    }
+    else if(maxIndex <= 192)
+    {
+        color =
+            ((uint32_t)(0xFF * ((maxIndex - 128) / 64.0f)) << 16) + 0xFF00;
+    }
+    else
+    {
+        color =
+            ((0xFF -
+              (uint32_t)(0xFF *
+                         ((maxIndex - 192) / 64.0f))) << 8) + 0xFF0000;
+    }
+
+    /* Draw frequency bin graph */
+    for(i = 0; i < 256; i += 2)
+    {
+        int x = min(100, (int)((data_output[i] + data_output[i + 1]) / 8));
+
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        Graphics_drawLineV(&g_sContext, i / 2, 114 - x, 14);
+        Graphics_setForegroundColor(&g_sContext, color);
+        Graphics_drawLineV(&g_sContext, i / 2, 114, 114 - x);
+    }
+
+}
 
 void initialization()
 {
+    MAP_WDT_A_holdTimer();
+        MAP_Interrupt_disableMaster();
+
+        /* Set the core voltage level to VCORE1 */
+        MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);
+
+        /* Set 2 flash wait states for Flash bank 0 and 1*/
+        MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+        MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+
+        /* Initializes Clock System */
+        MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
+        MAP_CS_initClockSignal(CS_MCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+        MAP_CS_initClockSignal(CS_HSMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+        MAP_CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+        MAP_CS_initClockSignal(CS_ACLK, CS_REFOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+
+        /* Initializes display */
+        Crystalfontz128x128_Init();
+
+        /* Set default screen orientation */
+        Crystalfontz128x128_SetOrientation(LCD_ORIENTATION_UP);
+
+        /* Initializes graphics context */
+        Graphics_initContext(&g_sContext, &g_sCrystalfontz128x128,
+                             &g_sCrystalfontz128x128_funcs);
+
+        /* Draw Title, x-axis, gradation & labels */
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+        Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
+        Graphics_clearDisplay(&g_sContext);
+        Graphics_drawLineH(&g_sContext, 0, 127, 115);
+        Graphics_drawLineV(&g_sContext, 0, 115, 117);
+        Graphics_drawLineV(&g_sContext, 16, 115, 116);
+        Graphics_drawLineV(&g_sContext, 31, 115, 117);
+        Graphics_drawLineV(&g_sContext, 32, 115, 117);
+        Graphics_drawLineV(&g_sContext, 48, 115, 116);
+        Graphics_drawLineV(&g_sContext, 63, 115, 117);
+        Graphics_drawLineV(&g_sContext, 64, 115, 117);
+        Graphics_drawLineV(&g_sContext, 80, 115, 116);
+        Graphics_drawLineV(&g_sContext, 95, 115, 117);
+        Graphics_drawLineV(&g_sContext, 96, 115, 117);
+        Graphics_drawLineV(&g_sContext, 112, 115, 116);
+        Graphics_drawLineV(&g_sContext, 127, 115, 117);
+
+        Graphics_drawStringCentered(&g_sContext,
+                                    (int8_t *)"512-Point FFT",
+                                    AUTO_STRING_LENGTH,
+                                    64,
+                                    6,
+                                    OPAQUE_TEXT);
+        Graphics_drawStringCentered(&g_sContext,
+                                    (int8_t *)"0",
+                                    AUTO_STRING_LENGTH,
+                                    4,
+                                    122,
+                                    OPAQUE_TEXT);
+        Graphics_drawStringCentered(&g_sContext,
+                                    (int8_t *)"1",
+                                    AUTO_STRING_LENGTH,
+                                    32,
+                                    122,
+                                    OPAQUE_TEXT);
+        Graphics_drawStringCentered(&g_sContext,
+                                    (int8_t *)"2",
+                                    AUTO_STRING_LENGTH,
+                                    64,
+                                    122,
+                                    OPAQUE_TEXT);
+        Graphics_drawStringCentered(&g_sContext,
+                                    (int8_t *)"3",
+                                    AUTO_STRING_LENGTH,
+                                    96,
+                                    122,
+                                    OPAQUE_TEXT);
+        Graphics_drawStringCentered(&g_sContext,
+                                    (int8_t *)"4",
+                                    AUTO_STRING_LENGTH,
+                                    125,
+                                    122,
+                                    OPAQUE_TEXT);
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_RED);
+        Graphics_drawStringCentered(&g_sContext,
+                                    (int8_t *)"kHz",
+                                    AUTO_STRING_LENGTH,
+                                    112,
+                                    122,
+                                    OPAQUE_TEXT);
+
+        // Initialize Hann Window
+        int n;
+        for(n = 0; n < SAMPLE_LENGTH; n++)
+        {
+            hann[n] = 0.5f - 0.5f * cosf((2 * PI * n) / (SAMPLE_LENGTH - 1));
+        }
+
+        /* Configuring Timer_A to have a period of approximately 500ms and
+         * an initial duty cycle of 10% of that (3200 ticks)  */
+        Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
+
+        /* Initializing ADC (MCLK/1/1) */
+        ADC14_enableModule();
+        ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_1, 0);
+
+        ADC14_setSampleHoldTrigger(ADC_TRIGGER_SOURCE1, false);
+
+        /* Configuring GPIOs (4.3 A10) */
+        GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
+                                                   GPIO_TERTIARY_MODULE_FUNCTION);
+
+        /* Configuring ADC Memory */
+        ADC14_configureSingleSampleMode(ADC_MEM0, true);
+        ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS,
+                                        ADC_INPUT_A10, false);
+
+        /* Set ADC result format to signed binary */
+        ADC14_setResultFormat(ADC_SIGNED_BINARY);
+
+        /* Configuring DMA module */
+        DMA_enableModule();
+        DMA_setControlBase(MSP_EXP432P401RLP_DMAControlTable);
+
+        DMA_disableChannelAttribute(DMA_CH7_ADC14,
+                                    UDMA_ATTR_ALTSELECT | UDMA_ATTR_USEBURST |
+                                    UDMA_ATTR_HIGH_PRIORITY |
+                                    UDMA_ATTR_REQMASK);
+
+        /* Setting Control Indexes. In this case we will set the source of the
+         * DMA transfer to ADC14 Memory 0
+         *  and the destination to the
+         * destination data array. */
+        MAP_DMA_setChannelControl(
+            UDMA_PRI_SELECT | DMA_CH7_ADC14,
+            UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
+            UDMA_DST_INC_16 | UDMA_ARB_1);
+        MAP_DMA_setChannelTransfer(UDMA_PRI_SELECT | DMA_CH7_ADC14,
+                                   UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
+                                   data_array1, SAMPLE_LENGTH);
+
+        MAP_DMA_setChannelControl(
+            UDMA_ALT_SELECT | DMA_CH7_ADC14,
+            UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
+            UDMA_DST_INC_16 | UDMA_ARB_1);
+        MAP_DMA_setChannelTransfer(UDMA_ALT_SELECT | DMA_CH7_ADC14,
+                                   UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
+                                   data_array2, SAMPLE_LENGTH);
+
+        /* Assigning/Enabling Interrupts */
+        MAP_DMA_assignInterrupt(DMA_INT1, 7);
+        MAP_Interrupt_enableInterrupt(INT_DMA_INT1);
+        MAP_DMA_assignChannel(DMA_CH7_ADC14);
+        MAP_DMA_clearInterruptFlag(7);
+        MAP_Interrupt_enableMaster();
+
+        /* Now that the DMA is primed and setup, enabling the channels. The ADC14
+         * hardware should take over and transfer/receive all bytes */
+        MAP_DMA_enableChannel(7);
+        MAP_ADC14_enableConversion();
+    Timer32_initModule(TIMER32_0_BASE, // There are two timers, we are using the one with the index 0
+                       TIMER32_PRESCALER_1, // The prescaler value is 1; The clock is not divided before feeding the counter
+                       TIMER32_32BIT, // The counter is used in 32-bit mode; the alternative is 16-bit mode
+                       TIMER32_PERIODIC_MODE); //This options is irrelevant for a one-shot timer
+
+    Timer32_setCount(TIMER32_0_BASE, 1);
+    Timer32_startTimer(TIMER32_0_BASE, true);
+
+    Timer32_initModule(TIMER32_1_BASE, // There are two timers, we are using the one with the index 1
+                       TIMER32_PRESCALER_1, // The prescaler value is 1; The clock is not divided before feeding the counter
+                       TIMER32_32BIT, // The counter is used in 32-bit mode; the alternative is 16-bit mode
+                       TIMER32_PERIODIC_MODE); //This options is irrelevant for a one-shot timer
+
+    Timer32_setCount(TIMER32_1_BASE, 1);
+    Timer32_startTimer(TIMER32_1_BASE, true);
+
+    initialize_LaunchpadLeftButton();
+    initialize_LaunchpadRightButton();
+
+    initialize_BoosterpackTopButton();
+    initialize_BoosterpackBottomButton();
+
     initialize_LaunchpadLED1();
     initialize_LaunchpadLED2_red();
     initialize_LaunchpadLED2_green();

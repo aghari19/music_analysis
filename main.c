@@ -40,8 +40,12 @@
 //
 //****************************************************************************
 
-#include <ti/devices/msp432p4xx/inc/msp.h>
 #include <ti/devices/msp432p4xx/driverlib/driverlib.h>
+#include "ButtonLED_HAL.h"
+
+
+
+#include <ti/devices/msp432p4xx/inc/msp.h>
 #include <ti/grlib/grlib.h>
 #include "LcdDriver/Crystalfontz128x128_ST7735.h"
 #include <stdio.h>
@@ -99,8 +103,12 @@ Timer_A_PWMConfig pwmConfig =
     (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
 };
 
+void menu();
+void initialization();
+
 int main(void)
 {
+    initialization();
     /* Halting WDT and disabling master interrupts */
     MAP_WDT_A_holdTimer();
     MAP_Interrupt_disableMaster();
@@ -264,12 +272,13 @@ int main(void)
 
     while(1)
     {
-        MAP_PCM_gotoLPM0();
+        menu();
+        //MAP_PCM_gotoLPM0();
 
-        int i = 0;
+        //int i = 0;
 
         /* Computer real FFT using the completed data buffer */
-        if(switch_data & 1)
+        /*if(switch_data & 1)
         {
             for(i = 0; i < 512; i++)
             {
@@ -292,10 +301,10 @@ int main(void)
                                        doBitReverse);
 
             arm_rfft_q15(&instance, data_array2, data_input);
-        }
+        }*/
 
         /* Calculate magnitude of FFT complex output */
-        for(i = 0; i < 1024; i += 2)
+        /*for(i = 0; i < 1024; i += 2)
         {
             data_output[i /
                         2] =
@@ -329,10 +338,10 @@ int main(void)
                 ((0xFF -
                   (uint32_t)(0xFF *
                              ((maxIndex - 192) / 64.0f))) << 8) + 0xFF0000;
-        }
+        }*/
 
         /* Draw frequency bin graph */
-        for(i = 0; i < 256; i += 2)
+        /*for(i = 0; i < 256; i += 2)
         {
             int x = min(100, (int)((data_output[i] + data_output[i + 1]) / 8));
 
@@ -340,7 +349,7 @@ int main(void)
             Graphics_drawLineV(&g_sContext, i / 2, 114 - x, 14);
             Graphics_setForegroundColor(&g_sContext, color);
             Graphics_drawLineV(&g_sContext, i / 2, 114, 114 - x);
-        }
+        }*/
     }
 }
 
@@ -370,4 +379,24 @@ void DMA_INT1_IRQHandler(void)
                                data_array2, SAMPLE_LENGTH);
         switch_data = 0;
     }
+}
+
+
+void initialization()
+{
+    initialize_LaunchpadLED1();
+    initialize_LaunchpadLED2_red();
+    initialize_LaunchpadLED2_green();
+    initialize_LaunchpadLED2_blue();
+    initialize_BoosterpackLED_red();
+    initialize_BoosterpackLED_green();
+    initialize_BoosterpackLED_blue();
+
+    turnOff_LaunchpadLED1();
+    turnOff_LaunchpadLED2_red();
+    turnOff_LaunchpadLED2_green();
+    turnOff_LaunchpadLED2_blue();
+    turnOff_BoosterpackLED_red();
+    turnOff_BoosterpackLED_green();
+    turnOff_BoosterpackLED_blue();
 }

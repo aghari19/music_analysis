@@ -84,6 +84,7 @@ button_t LaunchR = {GPIO_PORT_P1, GPIO_PIN4, Stable_R, RELEASED_STATE, TIMER32_1
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed);
 void make_3digit_NumString(unsigned int num, char *string);
 void FFT_play();
+void note_detection_play();
 void initial();
 
 void menu()
@@ -109,58 +110,70 @@ void menu()
     switch(option)
     {
         case FFT:
-            turnOff_BoosterpackLED_blue();
-            turnOff_BoosterpackLED_green();
-            turnOn_BoosterpackLED_red();
+
             FFT_play();
             if(LaunchL_Pressed)
             {
+                toggle_LaunchpadLED2_blue();
                 option = metronome;
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
                 Graphics_fillRectangle(&g_sContext, &Rec);
-
             }
             else if(LaunchR_Pressed)
             {
                 option = note_detection;
+                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+                Graphics_Rectangle Rec = {0,0, 128, 128};
+                Graphics_fillRectangle(&g_sContext, &Rec);
             }
             break;
         case metronome:
-            turnOff_BoosterpackLED_red();
-            turnOff_BoosterpackLED_green();
-            //turnOn_BoosterpackLED_blue();
             metronome_play(Booster1_Pressed, Booster2_Pressed);
             if(LaunchL_Pressed)
             {
+                Timer_A_stopTimer(TIMER_A0_BASE);
                 option = note_detection;
+                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+                Graphics_Rectangle Rec = {0,0, 128, 128};
+                Graphics_fillRectangle(&g_sContext, &Rec);
             }
             else if(LaunchR_Pressed)
             {
+                Timer_A_stopTimer(TIMER_A0_BASE);
                 option = FFT;
-                Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
                 Graphics_fillRectangle(&g_sContext, &Rec);
             }
             break;
         case note_detection:
-            turnOff_BoosterpackLED_red();
-            turnOff_BoosterpackLED_blue();
-            turnOn_BoosterpackLED_green();
+            note_detection_play();
             if(LaunchL_Pressed)
             {
                 option = FFT;
-                Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
                 Graphics_fillRectangle(&g_sContext, &Rec);
             }
             else if(LaunchR_Pressed)
             {
                 option = metronome;
+                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+                Graphics_Rectangle Rec = {0,0, 128, 128};
+                Graphics_fillRectangle(&g_sContext, &Rec);
             }
             break;
     }
 }
+
+void note_detection_play()
+{
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+    Graphics_drawString(&g_sContext,(int8_t*) "NOTE DETECTION", -1, 25, 10, true);
+
+}
+
 
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
 {
@@ -169,7 +182,7 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     static int BPM = 100;
     char string1[3];
 
-    song_note_t note = {note_c4, (60000)/(8*BPM)};
+    song_note_t note = {note_c2, (60000)/(8*BPM)};
 
     ConfigurePWM(&pwmConfig, note.note_name);
 
@@ -192,8 +205,6 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
 
     if(checking)
     {
-        turnOn_LaunchpadLED1();
-
         startOneShotTimer0(load1);//Timer for the timer
         startOneShotTimer1(load);//Timer for the beep
         Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
@@ -207,7 +218,6 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     if(timer1Expired() && time)
     {
         time = false;
-        turnOn_LaunchpadLED2_blue();
         Timer_A_stopTimer(TIMER_A0_BASE);
         Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
         Graphics_drawCircle(&g_sContext, 64, 64,13);
@@ -219,8 +229,6 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
         time = true;
         checking = true;
     }
-
-
 
     if((Booster1_Pressed) && (BPM<200))
     {
@@ -243,12 +251,12 @@ void make_3digit_NumString(unsigned int num, char *string)
 
 void FFT_play()
 {
+    toggle_LaunchpadLED2_blue();
     Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
     Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
 
 
     GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
-    //Graphics_clearDisplay(&g_sContext);
 
     Graphics_drawLineH(&g_sContext, 0, 127, 115);
     Graphics_drawLineV(&g_sContext, 0, 115, 117);

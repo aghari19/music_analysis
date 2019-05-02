@@ -51,7 +51,6 @@ int main(void)
 
 {
     initialization();
-    InitSound();
 
     while(1)
     {

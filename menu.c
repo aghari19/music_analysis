@@ -58,15 +58,22 @@ volatile int switch_data = 0;
 uint32_t color = 0;
 
 /* Timer_A PWM Configuration Parameter */
-Timer_A_PWMConfig pwmConfig =
-{
-    TIMER_A_CLOCKSOURCE_SMCLK,
-    TIMER_A_CLOCKSOURCE_DIVIDER_1,
-    (SMCLK_FREQUENCY / SAMPLE_FREQUENCY),
-    TIMER_A_CAPTURECOMPARE_REGISTER_1,
-    TIMER_A_OUTPUTMODE_SET_RESET,
-    (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
-};
+
+//void configureMic()
+//{
+    Timer_A_PWMConfig pwmConfig =
+    {
+        TIMER_A_CLOCKSOURCE_SMCLK,
+        TIMER_A_CLOCKSOURCE_DIVIDER_1,
+        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY),
+        TIMER_A_CAPTURECOMPARE_REGISTER_1,
+        TIMER_A_OUTPUTMODE_SET_RESET,
+        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
+    };
+
+    /*GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
+                                                       GPIO_TERTIARY_MODULE_FUNCTION);*/
+//}
 
 
 #define milsec 60000
@@ -144,6 +151,7 @@ void menu()
             else if(LaunchR_Pressed)
             {
                 Timer_A_stopTimer(TIMER_A0_BASE);
+                //configureMic();
                 option = FFT;
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
@@ -157,6 +165,7 @@ void menu()
             if(LaunchL_Pressed)
             {
                 option = FFT;
+                //configureMic();
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
                 Graphics_fillRectangle(&g_sContext, &Rec);
@@ -229,9 +238,12 @@ void note_detection_play()
     tone_frequency(maxIndex);
 }
 
-void tone_frequency(int maxIndex)
+void tone_frequency(int Index)
 {
+    int maxIndex = Index;
 
+    maxIndex = (maxIndex*4000)/256;
+    maxIndex = maxIndex +(4000/(256*2));
     if((maxIndex > 26) && (maxIndex <= 29))
     {
         Graphics_drawString(&g_sContext,(int8_t*) "A0", -1, 20, 30, true);
@@ -362,6 +374,7 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     char string1[3];
 
     song_note_t note = {note_c2, (60000)/(8*BPM)};
+    InitSound();
 
     ConfigurePWM(&pwmConfig, note.note_name);
 
@@ -619,6 +632,15 @@ void DMA_INT1_IRQHandler(void)
 
 void intital2()
 {
+    Timer_A_PWMConfig pwmConfig =
+    {
+        TIMER_A_CLOCKSOURCE_SMCLK,
+        TIMER_A_CLOCKSOURCE_DIVIDER_1,
+        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY),
+        TIMER_A_CAPTURECOMPARE_REGISTER_1,
+        TIMER_A_OUTPUTMODE_SET_RESET,
+        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
+    };
     MAP_Interrupt_disableMaster();
 
     /* Set the core voltage level to VCORE1 */
@@ -709,6 +731,16 @@ void intital2()
 
 void initial()
 {
+    Timer_A_PWMConfig pwmConfig =
+    {
+        TIMER_A_CLOCKSOURCE_SMCLK,
+        TIMER_A_CLOCKSOURCE_DIVIDER_1,
+        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY),
+        TIMER_A_CAPTURECOMPARE_REGISTER_1,
+        TIMER_A_OUTPUTMODE_SET_RESET,
+        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
+    };
+
     MAP_WDT_A_holdTimer();
         MAP_Interrupt_disableMaster();
 

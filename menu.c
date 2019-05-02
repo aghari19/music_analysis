@@ -83,17 +83,21 @@ button_t LaunchR = {GPIO_PORT_P1, GPIO_PIN4, Stable_R, RELEASED_STATE, TIMER32_1
 
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed);
 void make_3digit_NumString(unsigned int num, char *string);
-void FFT_play();
+void FFT_play(bool first);
 void note_detection_play();
+void tone_frequency(int maxIndex);
 void initial();
+void intital2();
 
 void menu()
 {
     static bool first = true;
-    if(first)
+    static bool second = false;
+
+    if(second)
     {
-        initial();
-        first =  false;
+        intital2();
+        second = false;
     }
     static options option = FFT;
 
@@ -110,11 +114,10 @@ void menu()
     switch(option)
     {
         case FFT:
-
-            FFT_play();
+            FFT_play(first);
+            first = false;
             if(LaunchL_Pressed)
             {
-                toggle_LaunchpadLED2_blue();
                 option = metronome;
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
@@ -145,16 +148,19 @@ void menu()
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
                 Graphics_fillRectangle(&g_sContext, &Rec);
+                first = true;
             }
             break;
         case note_detection:
             note_detection_play();
+            second = true;
             if(LaunchL_Pressed)
             {
                 option = FFT;
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
                 Graphics_fillRectangle(&g_sContext, &Rec);
+                first = true;
             }
             else if(LaunchR_Pressed)
             {
@@ -172,8 +178,180 @@ void note_detection_play()
     Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
     Graphics_drawString(&g_sContext,(int8_t*) "NOTE DETECTION", -1, 25, 10, true);
 
+    MAP_PCM_gotoLPM0();
+
+    int i = 0;
+
+    /* Computer real FFT using the completed data buffer */
+    if(switch_data & 1)
+    {
+        for(i = 0; i < 512; i++)
+        {
+            data_array1[i] = (int16_t)(hann[i] * data_array1[i]);
+        }
+        arm_rfft_instance_q15 instance;
+        status = arm_rfft_init_q15(&instance, fftSize, ifftFlag,
+                                   doBitReverse);
+
+        arm_rfft_q15(&instance, data_array1, data_input);
+    }
+    else
+    {
+        for(i = 0; i < 512; i++)
+        {
+            data_array2[i] = (int16_t)(hann[i] * data_array2[i]);
+        }
+        arm_rfft_instance_q15 instance;
+        status = arm_rfft_init_q15(&instance, fftSize, ifftFlag,
+                                   doBitReverse);
+
+        arm_rfft_q15(&instance, data_array2, data_input);
+    }
+
+    /* Calculate magnitude of FFT complex output */
+    for(i = 0; i < 1024; i += 2)
+    {
+        data_output[i /
+                    2] =
+            (int32_t)(sqrtf((data_input[i] *
+                             data_input[i]) +
+                            (data_input[i + 1] * data_input[i + 1])));
+    }
+
+    q15_t maxValue;
+    uint32_t maxIndex = 0;
+
+    //Upto this point the FFT is done!!
+    //data output is keeping the FFT result
+    //FFT is done it finds the max value in the array and it returns the maxIndex
+    //The below function return what index has the maxIndex
+    arm_max_q15(data_output, fftSize, &maxValue, &maxIndex);
+    tone_frequency(maxIndex);
 }
 
+void tone_frequency(int maxIndex)
+{
+    if((maxIndex > 26) && (maxIndex <= 29))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "A0", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 30) && (maxIndex < 32))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "B0", -1, 20, 30, true);
+    }
+    else if((maxIndex == 32) && (maxIndex < 34))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "C1", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 34) && (maxIndex < 38))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "D1", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 38) && (maxIndex < 42))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "E1", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 42) && (maxIndex < 45))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "F1", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 45) && (maxIndex < 50))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "G1", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 50) && (maxIndex <= 55))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "A1", -1, 20, 30, true);
+    }
+    else if((maxIndex > 55) && (maxIndex < 63))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "B1", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 63) && (maxIndex < 66))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "C2", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 66) && (maxIndex < 74))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "D2", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 74) && (maxIndex < 83))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "E2", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 84) && (maxIndex < 88))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "F2", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 88) && (maxIndex < 99))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "G2", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 99) && (maxIndex < 111))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "A2", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 111) && (maxIndex < 124))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "B2", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 124) && (maxIndex < 132))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "C3", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 132) && (maxIndex < 148))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "D3", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 148) && (maxIndex < 166))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "E3", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 166) && (maxIndex < 176))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "F3", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 176) && (maxIndex < 197))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "G3", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 197) && (maxIndex < 221))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "A3", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 221) && (maxIndex < 248))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "B3", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 248) && (maxIndex < 263))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "C4", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 263) && (maxIndex < 295))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "D4", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 295) && (maxIndex < 331))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "E4", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 331) && (maxIndex < 350))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "F4", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 350) && (maxIndex < 393))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "G4", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 393) && (maxIndex < 441))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "A4", -1, 20, 30, true);
+    }
+    else if((maxIndex >= 441) && (maxIndex < 495))
+    {
+        Graphics_drawString(&g_sContext,(int8_t*) "B4", -1, 20, 30, true);
+    }
+}
 
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
 {
@@ -249,9 +427,13 @@ void make_3digit_NumString(unsigned int num, char *string)
 }
 
 
-void FFT_play()
+void FFT_play(bool first)
 {
-    toggle_LaunchpadLED2_blue();
+    if(first)
+    {
+        initial();
+    }
+
     Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
     Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
 
@@ -359,6 +541,10 @@ void FFT_play()
     q15_t maxValue;
     uint32_t maxIndex = 0;
 
+    //Upto this point the FFT is done!!
+    //data output is keeping the FFT result
+    //FFT is done it finds the max value in the array and it returns the maxIndex
+    //The below function return what index has the maxIndex
     arm_max_q15(data_output, fftSize, &maxValue, &maxIndex);
 
     if(maxIndex <= 64)
@@ -386,6 +572,12 @@ void FFT_play()
     /* Draw frequency bin graph */
     for(i = 0; i < 256; i += 2)
     {
+        //if the energy is too high just use 100 for the display
+        //the raw data is what I care and the below line is the raw data. The 8 is for display for purpose. For
+        //note detection you loose three bits so you can take them off.
+        /*
+         * data_output[i] + data_output[i + 1] creates the value for the FFT
+         */
         int x = min(100, (int)((data_output[i] + data_output[i + 1]) / 8));
 
         Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
@@ -424,7 +616,95 @@ void DMA_INT1_IRQHandler(void)
     }
 }
 
+void intital2()
+{
+    MAP_Interrupt_disableMaster();
 
+    /* Set the core voltage level to VCORE1 */
+    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);
+
+    /* Set 2 flash wait states for Flash bank 0 and 1*/
+    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+
+    /* Initializes Clock System */
+    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
+    MAP_CS_initClockSignal(CS_MCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+    MAP_CS_initClockSignal(CS_HSMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+    MAP_CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+    MAP_CS_initClockSignal(CS_ACLK, CS_REFOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+
+    int n;
+    for(n = 0; n < SAMPLE_LENGTH; n++)
+    {
+        hann[n] = 0.5f - 0.5f * cosf((2 * PI * n) / (SAMPLE_LENGTH - 1));
+    }
+
+    /* Configuring Timer_A to have a period of approximately 500ms and
+     * an initial duty cycle of 10% of that (3200 ticks)  */
+    Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
+    //Timer_A_stopTimer(TIMER_A0_BASE);
+
+
+    /* Initializing ADC (MCLK/1/1) */
+    ADC14_enableModule();
+    ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_1, 0);
+
+    ADC14_setSampleHoldTrigger(ADC_TRIGGER_SOURCE1, false);
+
+    /* Configuring GPIOs (4.3 A10) */
+    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
+                                               GPIO_TERTIARY_MODULE_FUNCTION);
+
+    /* Configuring ADC Memory */
+    ADC14_configureSingleSampleMode(ADC_MEM0, true);
+    ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS,
+                                    ADC_INPUT_A10, false);
+
+    /* Set ADC result format to signed binary */
+    ADC14_setResultFormat(ADC_SIGNED_BINARY);
+
+    /* Configuring DMA module */
+    DMA_enableModule();
+    DMA_setControlBase(MSP_EXP432P401RLP_DMAControlTable);
+
+    DMA_disableChannelAttribute(DMA_CH7_ADC14,
+                                UDMA_ATTR_ALTSELECT | UDMA_ATTR_USEBURST |
+                                UDMA_ATTR_HIGH_PRIORITY |
+                                UDMA_ATTR_REQMASK);
+
+    /* Setting Control Indexes. In this case we will set the source of the
+     * DMA transfer to ADC14 Memory 0
+     *  and the destination to the
+     * destination data array. */
+    MAP_DMA_setChannelControl(
+        UDMA_PRI_SELECT | DMA_CH7_ADC14,
+        UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
+        UDMA_DST_INC_16 | UDMA_ARB_1);
+    MAP_DMA_setChannelTransfer(UDMA_PRI_SELECT | DMA_CH7_ADC14,
+                               UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
+                               data_array1, SAMPLE_LENGTH);
+
+    MAP_DMA_setChannelControl(
+        UDMA_ALT_SELECT | DMA_CH7_ADC14,
+        UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
+        UDMA_DST_INC_16 | UDMA_ARB_1);
+    MAP_DMA_setChannelTransfer(UDMA_ALT_SELECT | DMA_CH7_ADC14,
+                               UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
+                               data_array2, SAMPLE_LENGTH);
+
+    /* Assigning/Enabling Interrupts */
+    MAP_DMA_assignInterrupt(DMA_INT1, 7);
+    MAP_Interrupt_enableInterrupt(INT_DMA_INT1);
+    MAP_DMA_assignChannel(DMA_CH7_ADC14);
+    MAP_DMA_clearInterruptFlag(7);
+    MAP_Interrupt_enableMaster();
+
+    /* Now that the DMA is primed and setup, enabling the channels. The ADC14
+     * hardware should take over and transfer/receive all bytes */
+    MAP_DMA_enableChannel(7);
+    MAP_ADC14_enableConversion();
+}
 
 void initial()
 {
@@ -528,6 +808,7 @@ void initial()
         /* Configuring Timer_A to have a period of approximately 500ms and
          * an initial duty cycle of 10% of that (3200 ticks)  */
         Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
+
 
         /* Initializing ADC (MCLK/1/1) */
         ADC14_enableModule();

@@ -231,6 +231,7 @@ void note_detection_play()
 
 void tone_frequency(int maxIndex)
 {
+
     if((maxIndex > 26) && (maxIndex <= 29))
     {
         Graphics_drawString(&g_sContext,(int8_t*) "A0", -1, 20, 30, true);

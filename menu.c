@@ -59,8 +59,8 @@ uint32_t color = 0;
 
 /* Timer_A PWM Configuration Parameter */
 
-//void configureMic()
-//{
+void configureMic()
+{
     Timer_A_PWMConfig pwmConfig =
     {
         TIMER_A_CLOCKSOURCE_SMCLK,
@@ -71,41 +71,34 @@ uint32_t color = 0;
         (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
     };
 
-    /*GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
-                                                       GPIO_TERTIARY_MODULE_FUNCTION);*/
-//}
+    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
+                                                       GPIO_TERTIARY_MODULE_FUNCTION);
+}
 
 
 #define milsec 60000
-
-
 
 typedef enum {FFT,metronome,note_detection} options;
 
 button_t BoostS1 = {GPIO_PORT_P5, GPIO_PIN1, Stable_R, RELEASED_STATE, TIMER32_0_BASE};
 button_t BoostS2 = {GPIO_PORT_P3, GPIO_PIN5, Stable_R, RELEASED_STATE, TIMER32_1_BASE};
-button_t LaunchL = {GPIO_PORT_P1, GPIO_PIN1, Stable_R, RELEASED_STATE, TIMER32_0_BASE};
+button_t LaunchL = {GPIO_PORT_P1, GPIO_PIN1, Stable_R, RELEASED_STATE, TIMER32_1_BASE};
 button_t LaunchR = {GPIO_PORT_P1, GPIO_PIN4, Stable_R, RELEASED_STATE, TIMER32_1_BASE};
 
 
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed);
 void make_3digit_NumString(unsigned int num, char *string);
-void FFT_play(bool first);
+void FFT_play();
 void note_detection_play();
 void tone_frequency(int maxIndex);
 void initial();
-void intital2();
+void initial_note();
+
 
 void menu()
 {
     static bool first = true;
     static bool second = false;
-
-    if(second)
-    {
-        intital2();
-        second = false;
-    }
     static options option = FFT;
 
     bool Booster1_Pressed  = false;
@@ -121,8 +114,12 @@ void menu()
     switch(option)
     {
         case FFT:
-            FFT_play(first);
-            first = false;
+            if(first)
+            {
+                initial();
+                first = false;
+            }
+            FFT_play();
             if(LaunchL_Pressed)
             {
                 option = metronome;
@@ -143,6 +140,8 @@ void menu()
             if(LaunchL_Pressed)
             {
                 Timer_A_stopTimer(TIMER_A0_BASE);
+                configureMic();
+                second = true;
                 option = note_detection;
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
@@ -151,7 +150,7 @@ void menu()
             else if(LaunchR_Pressed)
             {
                 Timer_A_stopTimer(TIMER_A0_BASE);
-                //configureMic();
+                configureMic();
                 option = FFT;
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
@@ -160,12 +159,17 @@ void menu()
             }
             break;
         case note_detection:
+            if(second)
+            {
+                initial_note();
+                second = false;
+            }
+            configureMic();
             note_detection_play();
-            second = true;
             if(LaunchL_Pressed)
             {
                 option = FFT;
-                //configureMic();
+                configureMic();
                 Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
                 Graphics_Rectangle Rec = {0,0, 128, 128};
                 Graphics_fillRectangle(&g_sContext, &Rec);
@@ -369,14 +373,14 @@ void tone_frequency(int Index)
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
 {
     // The struct that holds all the info for PWM driving the buzzer
-    Timer_A_PWMConfig pwmConfig;
+    Timer_A_PWMConfig pwmConfig_h;
     static int BPM = 100;
     char string1[3];
 
     song_note_t note = {note_c2, (60000)/(8*BPM)};
-    InitSound();
 
-    ConfigurePWM(&pwmConfig, note.note_name);
+    InitSound();
+    ConfigurePWM(&pwmConfig_h, note.note_name);
 
     static bool checking = true;
     static bool time = true;
@@ -399,7 +403,7 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     {
         startOneShotTimer0(load1);//Timer for the timer
         startOneShotTimer1(load);//Timer for the beep
-        Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
+        Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig_h);
 
         Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
         Graphics_drawCircle(&g_sContext, 64, 64,13);
@@ -432,22 +436,8 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     }
 }
 
-void make_3digit_NumString(unsigned int num, char *string)
+void FFT_play()
 {
-    string[0]= (num/100)+'0';
-    string[1]= ((num%100) / 10) + '0';
-    string[2]= (num%10)+'0';
-    string[3]= 0;
-}
-
-
-void FFT_play(bool first)
-{
-    if(first)
-    {
-        initial();
-    }
-
     Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
     Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
 
@@ -630,7 +620,7 @@ void DMA_INT1_IRQHandler(void)
     }
 }
 
-void intital2()
+void initial_note()
 {
     Timer_A_PWMConfig pwmConfig =
     {
@@ -641,92 +631,92 @@ void intital2()
         TIMER_A_OUTPUTMODE_SET_RESET,
         (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
     };
-    MAP_Interrupt_disableMaster();
 
-    /* Set the core voltage level to VCORE1 */
-    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);
+    MAP_WDT_A_holdTimer();
+        MAP_Interrupt_disableMaster();
 
-    /* Set 2 flash wait states for Flash bank 0 and 1*/
-    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
-    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+        /* Set the core voltage level to VCORE1 */
+        MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);
 
-    /* Initializes Clock System */
-    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
-    MAP_CS_initClockSignal(CS_MCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_HSMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_ACLK, CS_REFOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+        /* Set 2 flash wait states for Flash bank 0 and 1*/
+        MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+        MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
 
-    int n;
-    for(n = 0; n < SAMPLE_LENGTH; n++)
-    {
-        hann[n] = 0.5f - 0.5f * cosf((2 * PI * n) / (SAMPLE_LENGTH - 1));
-    }
+        /* Initializes Clock System */
+        MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
+        MAP_CS_initClockSignal(CS_MCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+        MAP_CS_initClockSignal(CS_HSMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+        MAP_CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+        MAP_CS_initClockSignal(CS_ACLK, CS_REFOCLK_SELECT, CS_CLOCK_DIVIDER_1);
 
-    /* Configuring Timer_A to have a period of approximately 500ms and
-     * an initial duty cycle of 10% of that (3200 ticks)  */
-    Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
-    //Timer_A_stopTimer(TIMER_A0_BASE);
+        int n;
+        for(n = 0; n < SAMPLE_LENGTH; n++)
+        {
+            hann[n] = 0.5f - 0.5f * cosf((2 * PI * n) / (SAMPLE_LENGTH - 1));
+        }
 
+        /* Configuring Timer_A to have a period of approximately 500ms and
+         * an initial duty cycle of 10% of that (3200 ticks)  */
+        Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
 
-    /* Initializing ADC (MCLK/1/1) */
-    ADC14_enableModule();
-    ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_1, 0);
+        /* Initializing ADC (MCLK/1/1) */
+        ADC14_enableModule();
+        ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_1, 0);
 
-    ADC14_setSampleHoldTrigger(ADC_TRIGGER_SOURCE1, false);
+        ADC14_setSampleHoldTrigger(ADC_TRIGGER_SOURCE1, false);
 
-    /* Configuring GPIOs (4.3 A10) */
-    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
-                                               GPIO_TERTIARY_MODULE_FUNCTION);
+        /* Configuring GPIOs (4.3 A10) */
+        GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
+                                                   GPIO_TERTIARY_MODULE_FUNCTION);
 
-    /* Configuring ADC Memory */
-    ADC14_configureSingleSampleMode(ADC_MEM0, true);
-    ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS,
-                                    ADC_INPUT_A10, false);
+        /* Configuring ADC Memory */
+        ADC14_configureSingleSampleMode(ADC_MEM0, true);
+        ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS,
+                                        ADC_INPUT_A10, false);
 
-    /* Set ADC result format to signed binary */
-    ADC14_setResultFormat(ADC_SIGNED_BINARY);
+        /* Set ADC result format to signed binary */
+        ADC14_setResultFormat(ADC_SIGNED_BINARY);
 
-    /* Configuring DMA module */
-    DMA_enableModule();
-    DMA_setControlBase(MSP_EXP432P401RLP_DMAControlTable);
+        /* Configuring DMA module */
+        DMA_enableModule();
+        DMA_setControlBase(MSP_EXP432P401RLP_DMAControlTable);
 
-    DMA_disableChannelAttribute(DMA_CH7_ADC14,
-                                UDMA_ATTR_ALTSELECT | UDMA_ATTR_USEBURST |
-                                UDMA_ATTR_HIGH_PRIORITY |
-                                UDMA_ATTR_REQMASK);
+        DMA_disableChannelAttribute(DMA_CH7_ADC14,
+                                    UDMA_ATTR_ALTSELECT | UDMA_ATTR_USEBURST |
+                                    UDMA_ATTR_HIGH_PRIORITY |
+                                    UDMA_ATTR_REQMASK);
 
-    /* Setting Control Indexes. In this case we will set the source of the
-     * DMA transfer to ADC14 Memory 0
-     *  and the destination to the
-     * destination data array. */
-    MAP_DMA_setChannelControl(
-        UDMA_PRI_SELECT | DMA_CH7_ADC14,
-        UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
-        UDMA_DST_INC_16 | UDMA_ARB_1);
-    MAP_DMA_setChannelTransfer(UDMA_PRI_SELECT | DMA_CH7_ADC14,
-                               UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
-                               data_array1, SAMPLE_LENGTH);
+        /* Setting Control Indexes. In this case we will set the source of the
+         * DMA transfer to ADC14 Memory 0
+         *  and the destination to the
+         * destination data array. */
+        MAP_DMA_setChannelControl(
+            UDMA_PRI_SELECT | DMA_CH7_ADC14,
+            UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
+            UDMA_DST_INC_16 | UDMA_ARB_1);
+        MAP_DMA_setChannelTransfer(UDMA_PRI_SELECT | DMA_CH7_ADC14,
+                                   UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
+                                   data_array1, SAMPLE_LENGTH);
 
-    MAP_DMA_setChannelControl(
-        UDMA_ALT_SELECT | DMA_CH7_ADC14,
-        UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
-        UDMA_DST_INC_16 | UDMA_ARB_1);
-    MAP_DMA_setChannelTransfer(UDMA_ALT_SELECT | DMA_CH7_ADC14,
-                               UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
-                               data_array2, SAMPLE_LENGTH);
+        MAP_DMA_setChannelControl(
+            UDMA_ALT_SELECT | DMA_CH7_ADC14,
+            UDMA_SIZE_16 | UDMA_SRC_INC_NONE |
+            UDMA_DST_INC_16 | UDMA_ARB_1);
+        MAP_DMA_setChannelTransfer(UDMA_ALT_SELECT | DMA_CH7_ADC14,
+                                   UDMA_MODE_PINGPONG, (void*) &ADC14->MEM[0],
+                                   data_array2, SAMPLE_LENGTH);
 
-    /* Assigning/Enabling Interrupts */
-    MAP_DMA_assignInterrupt(DMA_INT1, 7);
-    MAP_Interrupt_enableInterrupt(INT_DMA_INT1);
-    MAP_DMA_assignChannel(DMA_CH7_ADC14);
-    MAP_DMA_clearInterruptFlag(7);
-    MAP_Interrupt_enableMaster();
+        /* Assigning/Enabling Interrupts */
+        MAP_DMA_assignInterrupt(DMA_INT1, 7);
+        MAP_Interrupt_enableInterrupt(INT_DMA_INT1);
+        MAP_DMA_assignChannel(DMA_CH7_ADC14);
+        MAP_DMA_clearInterruptFlag(7);
+        MAP_Interrupt_enableMaster();
 
-    /* Now that the DMA is primed and setup, enabling the channels. The ADC14
-     * hardware should take over and transfer/receive all bytes */
-    MAP_DMA_enableChannel(7);
-    MAP_ADC14_enableConversion();
+        /* Now that the DMA is primed and setup, enabling the channels. The ADC14
+         * hardware should take over and transfer/receive all bytes */
+        MAP_DMA_enableChannel(7);
+        MAP_ADC14_enableConversion();
 }
 
 void initial()
@@ -842,7 +832,6 @@ void initial()
          * an initial duty cycle of 10% of that (3200 ticks)  */
         Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig);
 
-
         /* Initializing ADC (MCLK/1/1) */
         ADC14_enableModule();
         ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_1, 0);
@@ -901,4 +890,12 @@ void initial()
          * hardware should take over and transfer/receive all bytes */
         MAP_DMA_enableChannel(7);
         MAP_ADC14_enableConversion();
+}
+
+void make_3digit_NumString(unsigned int num, char *string)
+{
+    string[0]= (num/100)+'0';
+    string[1]= ((num%100) / 10) + '0';
+    string[2]= (num%10)+'0';
+    string[3]= 0;
 }

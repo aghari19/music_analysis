@@ -10,6 +10,7 @@
 #include "ButtonLED_HAL.h"
 #include "Timer.h"
 #include "sound.h"
+#include "graphics.h"
 
 #include <ti/devices/msp432p4xx/inc/msp.h>
 #include "LcdDriver/Crystalfontz128x128_ST7735.h"
@@ -123,16 +124,12 @@ void menu()
             if(LaunchL_Pressed)
             {
                 option = metronome;
-                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-                Graphics_Rectangle Rec = {0,0, 128, 128};
-                Graphics_fillRectangle(&g_sContext, &Rec);
+                draw_white_rec(g_sContext);
             }
             else if(LaunchR_Pressed)
             {
                 option = note_detection;
-                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-                Graphics_Rectangle Rec = {0,0, 128, 128};
-                Graphics_fillRectangle(&g_sContext, &Rec);
+                draw_white_rec(g_sContext);
             }
             break;
         case metronome:
@@ -143,18 +140,14 @@ void menu()
                 configureMic();
                 second = true;
                 option = note_detection;
-                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-                Graphics_Rectangle Rec = {0,0, 128, 128};
-                Graphics_fillRectangle(&g_sContext, &Rec);
+                draw_white_rec(g_sContext);
             }
             else if(LaunchR_Pressed)
             {
                 Timer_A_stopTimer(TIMER_A0_BASE);
                 configureMic();
                 option = FFT;
-                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-                Graphics_Rectangle Rec = {0,0, 128, 128};
-                Graphics_fillRectangle(&g_sContext, &Rec);
+                draw_white_rec(g_sContext);
                 first = true;
             }
             break;
@@ -170,17 +163,13 @@ void menu()
             {
                 option = FFT;
                 configureMic();
-                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-                Graphics_Rectangle Rec = {0,0, 128, 128};
-                Graphics_fillRectangle(&g_sContext, &Rec);
+                draw_white_rec(g_sContext);
                 first = true;
             }
             else if(LaunchR_Pressed)
             {
                 option = metronome;
-                Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-                Graphics_Rectangle Rec = {0,0, 128, 128};
-                Graphics_fillRectangle(&g_sContext, &Rec);
+                draw_white_rec(g_sContext);
             }
             break;
     }
@@ -375,7 +364,6 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     // The struct that holds all the info for PWM driving the buzzer
     Timer_A_PWMConfig pwmConfig_h;
     static int BPM = 100;
-    char string1[3];
 
     song_note_t note = {note_c2, (60000)/(8*BPM)};
 
@@ -393,21 +381,14 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     load1 = 48000000/(BPM);
     load1 = load1*60;
 
-    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
-    Graphics_fillCircle(&g_sContext, 64, 64, 10);
-    Graphics_drawString(&g_sContext,(int8_t*) "BPM:", -1, 40, 10, true);
-    make_3digit_NumString(BPM, string1);
-    Graphics_drawString(&g_sContext,(int8_t*)string1, -1, 75, 10, true);
+    draw_black_circle_fill(g_sContext, BPM);
 
     if(checking)
     {
         startOneShotTimer0(load1);//Timer for the timer
         startOneShotTimer1(load);//Timer for the beep
         Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig_h);
-
-        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
-        Graphics_drawCircle(&g_sContext, 64, 64,13);
-        Graphics_drawCircle(&g_sContext, 64, 64,15);
+        draw_black_circles(g_sContext);
         checking = false;
     }
 
@@ -415,9 +396,7 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     {
         time = false;
         Timer_A_stopTimer(TIMER_A0_BASE);
-        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-        Graphics_drawCircle(&g_sContext, 64, 64,13);
-        Graphics_drawCircle(&g_sContext, 64, 64,15);
+        draw_white_circles(g_sContext);
     }
 
     if((timer0Expired()) && (!time))
@@ -892,10 +871,4 @@ void initial()
         MAP_ADC14_enableConversion();
 }
 
-void make_3digit_NumString(unsigned int num, char *string)
-{
-    string[0]= (num/100)+'0';
-    string[1]= ((num%100) / 10) + '0';
-    string[2]= (num%10)+'0';
-    string[3]= 0;
-}
+

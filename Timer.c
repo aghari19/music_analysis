@@ -8,7 +8,7 @@
 #include <ti/devices/msp432p4xx/driverlib/driverlib.h>
 #include "Timer.h"
 
-#define SYS_CLOCK_F_MHz 3
+#define SYS_CLOCK_F_MHz 48
 
 HWTimer_t timer1, timer0;
 

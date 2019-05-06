@@ -80,7 +80,6 @@ void configureMic()
                                                        GPIO_TERTIARY_MODULE_FUNCTION);
 }
 
-
 #define milsec 60000
 
 typedef enum {FFT,metronome,note_detection} options;
@@ -93,10 +92,10 @@ button_t LaunchR = {GPIO_PORT_P1, GPIO_PIN4, Stable_R, RELEASED_STATE, TIMER32_1
 
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed);
 void make_3digit_NumString(unsigned int num, char *string);
-void FFT_play();
-void note_detection_play();
-void tone_frequency(int maxIndex);
-void initial();
+void FFT_play(bool issensor);
+void note_detection_play(bool islight);
+void tone_frequency(int maxIndex, bool islight);
+void initial(bool issensor);
 void initial_note();
 void light_initial();
 
@@ -129,6 +128,7 @@ void menu()
     static bool second = false;
     static options option = FFT;
     static bool light_check = true;
+    static bool islight = true;
 
     bool Booster1_Pressed  = false;
     bool Booster2_Pressed = false;
@@ -140,9 +140,6 @@ void menu()
     LaunchL_Pressed = ButtonPushed(&LaunchL);
     LaunchR_Pressed = ButtonPushed(&LaunchR);
 
-    static int forcolor;
-    static int backcolor;
-
     if(light_check)
     {
         light_initial();
@@ -150,38 +147,46 @@ void menu()
     }
 
     lux = OPT3001_getLux();
-    /*if(lux<=10)
+    if(lux<=10)
     {
-        forcolor = 0x00FFFFFF;
-        backcolor = 0x00000000;
+        islight = false;
     }
     else
     {
-        forcolor = 0x00000000;
-        backcolor = 0x00000000;
-    }*/
-
-
-
-
+       islight = true;
+    }
     switch(option)
     {
         case FFT:
             if(first)
             {
-                initial();
+                initial(islight);
                 first = false;
             }
-            FFT_play();
+            FFT_play(islight);
             if(LaunchL_Pressed)
             {
                 option = metronome;
-                draw_white_rec(g_sContext);
+                if(islight)
+                {
+                    draw_white_rec(g_sContext);
+                }
+                else
+                {
+                    draw_black_rec(g_sContext);
+                }
             }
             else if(LaunchR_Pressed)
             {
                 option = note_detection;
-                draw_white_rec(g_sContext);
+                if(islight)
+                {
+                    draw_white_rec(g_sContext);
+                }
+                else
+                {
+                    draw_black_rec(g_sContext);
+                }
             }
             break;
         case metronome:
@@ -210,7 +215,7 @@ void menu()
                 second = false;
             }
             configureMic();
-            note_detection_play();
+            note_detection_play(islight);
             if(LaunchL_Pressed)
             {
                 option = FFT;
@@ -227,11 +232,34 @@ void menu()
     }
 }
 
-void note_detection_play()
+void note_detection_play(bool islight)
 {
-    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
-    Graphics_drawString(&g_sContext,(int8_t*) "NOTE DETECTION", -1, 25, 10, true);
+    static bool prev = false;
+    lux = OPT3001_getLux();
+    if(lux<=10)
+    {
+        islight = false;
+    }
+    else
+    {
+        islight = true;
+    }
 
+    if(islight)
+    {
+        Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        Graphics_drawString(&g_sContext,(int8_t*) "NOTE DETECTION", -1, 25, 10, true);
+    }
+    else
+    {
+        Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+        Graphics_drawString(&g_sContext,(int8_t*) "NOTE DETECTION", -1, 25, 10, true);
+    }
+    if(prev != islight)
+    {
+      Graphics_clearDisplay(&g_sContext);
+      prev = islight;
+    }
     MAP_PCM_gotoLPM0();
 
     int i = 0;
@@ -276,18 +304,38 @@ void note_detection_play()
     uint32_t maxIndex = 0;
 
     arm_max_q15(data_output, fftSize, &maxValue, &maxIndex);
-    tone_frequency(maxIndex);
+    tone_frequency(maxIndex, islight);
 }
 
-void tone_frequency(int Index)
+void tone_frequency(int Index, bool islight)
 {
     int maxIndex = Index;
     maxIndex = (maxIndex * 4000) / 512;
     maxIndex = maxIndex + (4000 / (1024));
-    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-    Graphics_Rectangle Rec = { 20, 30, 128, 128 };
-    Graphics_fillRectangle(&g_sContext, &Rec);
-    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+    if(islight)
+    {
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        Graphics_drawString(&g_sContext, (int8_t*) "###", -1, 50, 30, true);
+        Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                        true);
+        Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                        true);
+        Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                        true);
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+    }
+    else
+    {
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+        Graphics_drawString(&g_sContext, (int8_t*) "###", -1, 50, 30, true);
+        Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                        true);
+        Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                        true);
+        Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                        true);
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+    }
     if ((maxIndex >= 127) && (maxIndex < 140))
     {
         Graphics_drawString(&g_sContext, (int8_t*) "C3", -1, 50, 30, true);
@@ -1026,14 +1074,46 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     load1 = 48000000/(BPM);
     load1 = load1*60;
 
-    draw_black_circle_fill(g_sContext, BPM);
+    static bool prev = false;
+    static bool islight;
+    lux = OPT3001_getLux();
+    if(lux<=10)
+    {
+        islight = false;
+    }
+    else
+    {
+        islight = true;
+    }
 
+    if(islight)
+    {
+        Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        draw_black_circle_fill(g_sContext, BPM);
+    }
+    else
+    {
+        Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+        draw_white_circle_fill(g_sContext, BPM);
+    }
+    if(prev != islight)
+    {
+      Graphics_clearDisplay(&g_sContext);
+      prev = islight;
+    }
     if(checking)
     {
         startOneShotTimer0(load1);//Timer for the timer
         startOneShotTimer1(load);//Timer for the beep
         Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig_h);
-        draw_black_circles(g_sContext);
+        if(islight)
+        {
+            draw_black_circles(g_sContext);
+        }
+        else
+        {
+            draw_white_circles(g_sContext);
+        }
         checking = false;
     }
 
@@ -1041,7 +1121,14 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     {
         time = false;
         Timer_A_stopTimer(TIMER_A0_BASE);
-        draw_white_circles(g_sContext);
+        if(islight)
+        {
+            draw_white_circles(g_sContext);
+        }
+        else
+        {
+            draw_black_circles(g_sContext);
+        }
     }
 
     if((timer0Expired()) && (!time))
@@ -1060,14 +1147,25 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     }
 }
 
-void FFT_play()
+void FFT_play(bool islight)
 {
-    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
-    Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-
+    static bool prev = true;
+    if(islight)
+    {
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+        Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+    }
+    else
+    {
+        Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+    }
 
     GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
-
+    if(prev != islight)
+    {
+        Graphics_clearDisplay(&g_sContext);
+    }
     Graphics_drawLineH(&g_sContext, 0, 127, 115);
     Graphics_drawLineV(&g_sContext, 0, 115, 117);
     Graphics_drawLineV(&g_sContext, 16, 115, 116);
@@ -1208,12 +1306,19 @@ void FFT_play()
          */
         int x = min(100, (int)((data_output[i] + data_output[i + 1]) / 2));
 
-        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        if(islight)
+        {
+            Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        }
+        else
+        {
+            Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+        }
         Graphics_drawLineV(&g_sContext, i / 4, 114 - x, 14);
         Graphics_setForegroundColor(&g_sContext, color);
         Graphics_drawLineV(&g_sContext, i / 4, 114, 114 - x);
     }
-
+    prev = islight;
 }
 
 /* Completion interrupt for ADC14 MEM0 */
@@ -1343,7 +1448,7 @@ void initial_note()
         MAP_ADC14_enableConversion();
 }
 
-void initial()
+void initial(bool issensor)
 {
     Timer_A_PWMConfig pwmConfig =
     {
@@ -1382,9 +1487,18 @@ void initial()
         Graphics_initContext(&g_sContext, &g_sCrystalfontz128x128,
                              &g_sCrystalfontz128x128_funcs);
 
-        /* Draw Title, x-axis, gradation & labels */
-        Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
-        Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        if(issensor)
+        {
+            Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+            Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        }
+        else
+        {
+            Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+            Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+        }
+
+
         GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
         Graphics_clearDisplay(&g_sContext);
         Graphics_drawLineH(&g_sContext, 0, 127, 115);

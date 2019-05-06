@@ -5,16 +5,13 @@
 
 void menu();
 void initialization();
-//void initialLUX();
 
 int main(void)
 
 {
     initialization();
-
     while(1)
     {
-
         menu();
     }
 }

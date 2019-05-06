@@ -18,12 +18,8 @@
 #include <arm_math.h>
 #include <arm_const_structs.h>
 
-#include "HAL_I2C.h"
-#include "HAL_OPT3001.h"
-#include "LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.h"
-
-#define TEST_LENGTH_SAMPLES 512
-#define SAMPLE_LENGTH 512
+#define TEST_LENGTH_SAMPLES 2048
+#define SAMPLE_LENGTH 2048
 
 /* ------------------------------------------------------------------
  * Global variables for FFT Bin Example
@@ -41,13 +37,13 @@ Graphics_Context g_sContext;
 
 /* DMA Control Table */
 #if defined(__TI_COMPILER_VERSION__)
-#pragma DATA_ALIGN(MSP_EXP432P401RLP_DMAControlTable, 1024)
+#pragma DATA_ALIGN(MSP_EXP432P401RLP_DMAControlTable, 4096)
 #elif defined(__IAR_SYSTEMS_ICC__)
-#pragma data_alignment=1024
+#pragma data_alignment=4096
 #elif defined(__GNUC__)
-__attribute__ ((aligned (1024)))
+__attribute__ ((aligned (4096)))
 #elif defined(__CC_ARM)
-__align(1024)
+__align(4096)
 #endif
 static DMA_ControlTable MSP_EXP432P401RLP_DMAControlTable[32];
 
@@ -62,29 +58,24 @@ volatile int switch_data = 0;
 
 uint32_t color = 0;
 
-/*Light Sensor Variables*/
-/* Variable for storing lux value returned from OPT3001 */
-float lux;
+/* Timer_A PWM Configuration Parameter */
 
-/* Timer_A Up Configuration Parameter */
-const Timer_A_UpModeConfig upConfig =
+void configureMic()
 {
-        TIMER_A_CLOCKSOURCE_ACLK,               // ACLK Clock SOurce
-        TIMER_A_CLOCKSOURCE_DIVIDER_1,          // ACLK/1 = 3MHz
-        200,                                    // 200 tick period
-        TIMER_A_TAIE_INTERRUPT_DISABLE,         // Disable Timer interrupt
-        TIMER_A_CCIE_CCR0_INTERRUPT_DISABLE,    // Disable CCR0 interrupt
-        TIMER_A_DO_CLEAR                        // Clear value
-};
+    Timer_A_PWMConfig pwmConfig =
+    {
+        TIMER_A_CLOCKSOURCE_SMCLK,
+        TIMER_A_CLOCKSOURCE_DIVIDER_1,
+        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY),
+        TIMER_A_CAPTURECOMPARE_REGISTER_1,
+        TIMER_A_OUTPUTMODE_SET_RESET,
+        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
+    };
 
-/* Timer_A Compare Configuration Parameter  (PWM) */
-Timer_A_CompareModeConfig compareConfig_PWM =
-{
-        TIMER_A_CAPTURECOMPARE_REGISTER_3,          // Use CCR3
-        TIMER_A_CAPTURECOMPARE_INTERRUPT_DISABLE,   // Disable CCR interrupt
-        TIMER_A_OUTPUTMODE_TOGGLE_SET,              // Toggle output but
-        100                                         // 50% Duty Cycle
-};
+    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
+                                                       GPIO_TERTIARY_MODULE_FUNCTION);
+}
+
 
 #define milsec 60000
 
@@ -97,21 +88,18 @@ button_t LaunchR = {GPIO_PORT_P1, GPIO_PIN4, Stable_R, RELEASED_STATE, TIMER32_1
 
 
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed);
-void FFT_play(bool sensor);
+void make_3digit_NumString(unsigned int num, char *string);
+void FFT_play();
 void note_detection_play();
 void tone_frequency(int maxIndex);
-void configureMic();
 void initial();
 void initial_note();
-void initialLUX();
+
 
 void menu()
 {
-    //initialLUX();
-
     static bool first = true;
     static bool second = false;
-    static bool light_sensor = false;
     static options option = FFT;
 
     bool Booster1_Pressed  = false;
@@ -124,16 +112,6 @@ void menu()
     LaunchL_Pressed = ButtonPushed(&LaunchL);
     LaunchR_Pressed = ButtonPushed(&LaunchR);
 
-    //lux = OPT3001_getLux();
-    if(12<10)
-    {
-        light_sensor = true;
-    }
-    else
-    {
-        light_sensor = false;
-    }
-
     switch(option)
     {
         case FFT:
@@ -142,7 +120,7 @@ void menu()
                 initial();
                 first = false;
             }
-            FFT_play(light_sensor);
+            FFT_play();
             if(LaunchL_Pressed)
             {
                 option = metronome;
@@ -199,7 +177,9 @@ void menu()
 
 void note_detection_play()
 {
-    note_detection_header_black(g_sContext);
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+    Graphics_drawString(&g_sContext,(int8_t*) "NOTE DETECTION", -1, 25, 10, true);
+
     MAP_PCM_gotoLPM0();
 
     int i = 0;
@@ -207,7 +187,7 @@ void note_detection_play()
     /* Computer real FFT using the completed data buffer */
     if(switch_data & 1)
     {
-        for(i = 0; i < 512; i++)
+        for(i = 0; i < 2048; i++)
         {
             data_array1[i] = (int16_t)(hann[i] * data_array1[i]);
         }
@@ -219,7 +199,7 @@ void note_detection_play()
     }
     else
     {
-        for(i = 0; i < 512; i++)
+        for(i = 0; i < 2048; i++)
         {
             data_array2[i] = (int16_t)(hann[i] * data_array2[i]);
         }
@@ -231,7 +211,7 @@ void note_detection_play()
     }
 
     /* Calculate magnitude of FFT complex output */
-    for(i = 0; i < 1024; i += 2)
+    for(i = 0; i < 4096; i += 2)
     {
         data_output[i /
                     2] =
@@ -254,10 +234,607 @@ void note_detection_play()
 void tone_frequency(int Index)
 {
     int maxIndex = Index;
+    maxIndex = (maxIndex * 4000) / 512;
+    maxIndex = maxIndex + (4000 / (1024));
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+    Graphics_Rectangle Rec = { 20, 30, 128, 128 };
+    Graphics_fillRectangle(&g_sContext, &Rec);
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+    /*if((maxIndex > 10) && (maxIndex <= 29))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "A0", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 29) && (maxIndex < 31))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "B0", -1, 20, 30, true);
+        }
+        else if((maxIndex == 31) && (maxIndex < 33))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "C1", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 33) && (maxIndex < 39))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "D1", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 39) && (maxIndex < 42))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "E1", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 42) && (maxIndex < 45))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "F1", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 45) && (maxIndex < 50))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "G1", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 50) && (maxIndex < 57))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "A1", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 57) && (maxIndex < 63))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "B1", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 63) && (maxIndex < 68))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "C2", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 68) && (maxIndex < 76))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "D2", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 76) && (maxIndex < 85))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "E2", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 85) && (maxIndex < 89))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "F2", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 89) && (maxIndex < 100))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "G2", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 100) && (maxIndex < 114))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "A2", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 114) && (maxIndex < 126))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "B2", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 126) && (maxIndex < 135))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "C3", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 135) && (maxIndex < 150))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "D3", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 150) && (maxIndex < 170))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "E3", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 170) && (maxIndex < 180))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "F3", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 180) && (maxIndex < 200))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "G3", -1, 20, 30, true);
+        }
+        else if((maxIndex >= 200) && (maxIndex < 225))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "A3", -1, 20, 30, true);
+        }*/
+        if((maxIndex >= 225) && (maxIndex < 250))
+        {
+            Graphics_drawString(&g_sContext,(int8_t*) "B3", -1, 50, 30, true);
+        }
+        else if((maxIndex>251) && (maxIndex<=271))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "C4", -1, 50, 30, true);
+          if((maxIndex>251) && (maxIndex<=256))
+          {
+              Graphics_drawString(&g_sContext,(int8_t*) "FLAT", -1, 50, 50, true);
+          }
+          else if((maxIndex>256) && (maxIndex<=266))
+          {
+              Graphics_drawString(&g_sContext,(int8_t*) "TUNE", -1, 50, 70, true);
+          }
+          else if((maxIndex>266) && (maxIndex<=271))
+          {
+              Graphics_drawString(&g_sContext,(int8_t*) "SHARP", -1, 50, 90, true);
+          }
+        }
+        else if((maxIndex>271)&&(maxIndex<=285))
+        {
+              Graphics_drawString(&g_sContext,(int8_t*) "C#4", -1, 50, 30, true);
+          if ((maxIndex >= 271) && (maxIndex <= 275))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 275) && (maxIndex <= 280))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 280) && (maxIndex <= 285))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>286)&&(maxIndex<=300))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "D4", -1, 50, 30, true);
+          if ((maxIndex >= 286) && (maxIndex <= 290))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 290) && (maxIndex <= 295))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 295) && (maxIndex <= 300))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
 
-    maxIndex = (maxIndex*4000)/256;
-    maxIndex = maxIndex +(4000/(256*2));
-    display_note_detection_black(g_sContext, maxIndex);
+        }
+        else if((maxIndex>303)&&(maxIndex<=319))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "D#4", -1, 50, 30, true);
+          if ((maxIndex >= 303) && (maxIndex <= 308))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 308) && (maxIndex <= 315))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 315) && (maxIndex <= 319))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>321)&&(maxIndex<=340))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "E4", -1, 50, 30, true);
+          if ((maxIndex >= 321) && (maxIndex <= 327))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 327) && (maxIndex <= 335))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 335) && (maxIndex <= 340))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>340)&&(maxIndex<=355))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "F4", -1, 50, 30, true);
+          if ((maxIndex >= 340) && (maxIndex <= 346))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 346) && (maxIndex <= 353))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 353) && (maxIndex <= 355))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>355)&&(maxIndex<=380))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "F#4", -1, 50, 30, true);
+          if ((maxIndex >= 355) && (maxIndex <= 363))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 363) && (maxIndex <= 375))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 375) && (maxIndex <= 380))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>380)&&(maxIndex<=400))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "G4", -1, 50, 30, true);
+          if ((maxIndex >= 380) && (maxIndex <= 385))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 385) && (maxIndex <= 395))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 395) && (maxIndex <= 400))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>405)&&(maxIndex<=425))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "G#4", -1, 50, 30, true);
+          if ((maxIndex >= 405) && (maxIndex <= 208))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 408) && (maxIndex <= 418))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 418) && (maxIndex <= 425))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>430)&&(maxIndex<=450))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "A4", -1, 50, 30, true);
+          if ((maxIndex >= 430) && (maxIndex <= 435))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 435) && (maxIndex <= 443))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 443) && (maxIndex <= 450))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>455)&&(maxIndex<=480))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "A#4", -1, 50, 30, true);
+          if ((maxIndex >= 455) && (maxIndex <=461))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 461) && (maxIndex <= 470))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 470) && (maxIndex <= 480))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>483)&&(maxIndex<=510))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "B4", -1, 50, 30, true);
+          if ((maxIndex >= 483) && (maxIndex <= 487))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 487) && (maxIndex <= 497))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 497) && (maxIndex <= 510))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+
+        }
+        else if((maxIndex>513)&&(maxIndex<540))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "C5", -1, 50, 30, true);
+          if ((maxIndex >= 513) && (maxIndex <= 518))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 518) && (maxIndex <= 530 ))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 530) && (maxIndex <= 540))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=544)&&(maxIndex<565))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "C#5", -1, 50, 30, true);
+          if ((maxIndex >= 544) && (maxIndex <= 550))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 554) && (maxIndex <= 560))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 560) && (maxIndex <= 565))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=570)&&(maxIndex<600))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "D5", -1, 50, 30, true);
+          if ((maxIndex >= 570) && (maxIndex <= 580))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 580) && (maxIndex <= 591))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 591) && (maxIndex <= 600))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=610)&&(maxIndex<645))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "D#5", -1, 50, 30, true);
+          if ((maxIndex >= 610) && (maxIndex <= 615))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 615) && (maxIndex <= 630))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 630) && (maxIndex <= 645))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=650)&&(maxIndex<680))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "E5", -1, 50, 30, true);
+          if ((maxIndex >= 650) && (maxIndex <= 255))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 655) && (maxIndex <= 670))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 670) && (maxIndex <= 680))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=688)&&(maxIndex<725))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "F5", -1, 50, 30, true);
+          if ((maxIndex >= 688) && (maxIndex <= 694))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 694) && (maxIndex <= 710))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 710) && (maxIndex <= 725))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        /*else if((maxIndex>=700)&&(maxIndex<741))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "F#5", -1, 20, 30, true);
+          if ((maxIndex >= 272) && (maxIndex <= 275))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 275) && (maxIndex <= 279))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 279) && (maxIndex <= 282))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=741)&&(maxIndex<785))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "G5", -1, 20, 30, true);
+                    if ((maxIndex >= 272) && (maxIndex <= 275))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 275) && (maxIndex <= 279))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 279) && (maxIndex <= 282))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=785)&&(maxIndex<832))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "G#5", -1, 20, 30, true);
+                    if ((maxIndex >= 272) && (maxIndex <= 275))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 275) && (maxIndex <= 279))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 279) && (maxIndex <= 282))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=832)&&(maxIndex<880))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "A5", -1, 20, 30, true);
+                    if ((maxIndex >= 272) && (maxIndex <= 275))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 275) && (maxIndex <= 279))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 279) && (maxIndex <= 282))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=880)&&(maxIndex<934))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "A#5", -1, 20, 30, true);
+                    if ((maxIndex >= 272) && (maxIndex <= 275))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 275) && (maxIndex <= 279))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 279) && (maxIndex <= 282))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=934)&&(maxIndex<989))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "B5", -1, 20, 30, true);
+                    if ((maxIndex >= 272) && (maxIndex <= 275))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
+                                true);
+          }
+          else if ((maxIndex > 275) && (maxIndex <= 279))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
+                                true);
+          }
+          else if ((maxIndex > 279) && (maxIndex <= 282))
+          {
+              Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
+                                true);
+          }
+        }
+        else if((maxIndex>=989)&&(maxIndex<1048))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "C6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1048)&&(maxIndex<1110))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "C#6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1110)&&(maxIndex<1176))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "D6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1176)&&(maxIndex<1246))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "D#6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1246)&&(maxIndex<1320))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "E6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1320)&&(maxIndex<1398))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "F6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1398)&&(maxIndex<1481))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "F#6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1481)&&(maxIndex<1569))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "G6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1569)&&(maxIndex<1663))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "G#6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1663)&&(maxIndex<1762))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "A6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1762)&&(maxIndex<1866))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "A#6", -1, 20, 30, true);
+        }
+        else if((maxIndex>=1866)&&(maxIndex<1976))
+        {
+          Graphics_drawString(&g_sContext,(int8_t*) "B6", -1, 20, 30, true);
+        }*/
 }
 
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
@@ -316,16 +893,72 @@ void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed)
     }
 }
 
-void FFT_play(bool sensor)
+void FFT_play()
 {
-    if(sensor)
-    {
-        FFT_display_white(g_sContext);
-    }
-    else
-    {
-        FFT_display_black(g_sContext);
-    }
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+    Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+
+
+    GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
+
+    Graphics_drawLineH(&g_sContext, 0, 127, 115);
+    Graphics_drawLineV(&g_sContext, 0, 115, 117);
+    Graphics_drawLineV(&g_sContext, 16, 115, 116);
+    Graphics_drawLineV(&g_sContext, 31, 115, 117);
+    Graphics_drawLineV(&g_sContext, 32, 115, 117);
+    Graphics_drawLineV(&g_sContext, 48, 115, 116);
+    Graphics_drawLineV(&g_sContext, 63, 115, 117);
+    Graphics_drawLineV(&g_sContext, 64, 115, 117);
+    Graphics_drawLineV(&g_sContext, 80, 115, 116);
+    Graphics_drawLineV(&g_sContext, 95, 115, 117);
+    Graphics_drawLineV(&g_sContext, 96, 115, 117);
+    Graphics_drawLineV(&g_sContext, 112, 115, 116);
+    Graphics_drawLineV(&g_sContext, 127, 115, 117);
+
+    Graphics_drawStringCentered(&g_sContext,
+                                (int8_t *)"2048-Point FFT",
+                                AUTO_STRING_LENGTH,
+                                64,
+                                6,
+                                OPAQUE_TEXT);
+    Graphics_drawStringCentered(&g_sContext,
+                                (int8_t *)"0",
+                                AUTO_STRING_LENGTH,
+                                4,
+                                122,
+                                OPAQUE_TEXT);
+    Graphics_drawStringCentered(&g_sContext,
+                                (int8_t *)"1",
+                                AUTO_STRING_LENGTH,
+                                32,
+                                122,
+                                OPAQUE_TEXT);
+    Graphics_drawStringCentered(&g_sContext,
+                                (int8_t *)"2",
+                                AUTO_STRING_LENGTH,
+                                64,
+                                122,
+                                OPAQUE_TEXT);
+    Graphics_drawStringCentered(&g_sContext,
+                                (int8_t *)"3",
+                                AUTO_STRING_LENGTH,
+                                96,
+                                122,
+                                OPAQUE_TEXT);
+    Graphics_drawStringCentered(&g_sContext,
+                                (int8_t *)"4",
+                                AUTO_STRING_LENGTH,
+                                125,
+                                122,
+                                OPAQUE_TEXT);
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_RED);
+    Graphics_drawStringCentered(&g_sContext,
+                                (int8_t *)"kHz",
+                                AUTO_STRING_LENGTH,
+                                112,
+                                122,
+                                OPAQUE_TEXT);
+
     MAP_PCM_gotoLPM0();
 
     int i = 0;
@@ -333,7 +966,7 @@ void FFT_play(bool sensor)
     /* Computer real FFT using the completed data buffer */
     if(switch_data & 1)
     {
-        for(i = 0; i < 512; i++)
+        for(i = 0; i < 2048; i++)
         {
             data_array1[i] = (int16_t)(hann[i] * data_array1[i]);
         }
@@ -345,7 +978,7 @@ void FFT_play(bool sensor)
     }
     else
     {
-        for(i = 0; i < 512; i++)
+        for(i = 0; i < 2048; i++)
         {
             data_array2[i] = (int16_t)(hann[i] * data_array2[i]);
         }
@@ -357,7 +990,7 @@ void FFT_play(bool sensor)
     }
 
     /* Calculate magnitude of FFT complex output */
-    for(i = 0; i < 1024; i += 2)
+    for(i = 0; i < 4096; i += 2)
     {
         data_output[i /
                     2] =
@@ -398,7 +1031,7 @@ void FFT_play(bool sensor)
     }
 
     /* Draw frequency bin graph */
-    for(i = 0; i < 256; i += 2)
+    for(i = 0; i < 1024; i += 2)
     {
         //if the energy is too high just use 100 for the display
         //the raw data is what I care and the below line is the raw data. The 8 is for display for purpose. For
@@ -602,7 +1235,7 @@ void initial()
         Graphics_drawLineV(&g_sContext, 127, 115, 117);
 
         Graphics_drawStringCentered(&g_sContext,
-                                    (int8_t *)"512-Point FFT",
+                                    (int8_t *)"2048-Point FFT",
                                     AUTO_STRING_LENGTH,
                                     64,
                                     6,
@@ -714,57 +1347,4 @@ void initial()
          * hardware should take over and transfer/receive all bytes */
         MAP_DMA_enableChannel(7);
         MAP_ADC14_enableConversion();
-}
-
-void initialLUX()
-{
-    MAP_WDT_A_holdTimer();
-    MAP_Interrupt_disableMaster();
-
-    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);
-    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
-    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
-
-    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
-    MAP_CS_initClockSignal(CS_MCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_HSMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-    MAP_CS_initClockSignal(CS_ACLK, CS_REFOCLK_SELECT, CS_CLOCK_DIVIDER_1);
-
-    Crystalfontz128x128_Init();
-
-    Crystalfontz128x128_SetOrientation(0);
-
-    Graphics_initContext(&g_sContext, &g_sCrystalfontz128x128, &g_sCrystalfontz128x128_funcs);
-
-    MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2, GPIO_PIN6,
-            GPIO_PRIMARY_MODULE_FUNCTION);
-
-    MAP_Timer_A_configureUpMode(TIMER_A0_BASE, &upConfig);
-    MAP_Timer_A_startCounter(TIMER_A0_BASE, TIMER_A_UP_MODE);
-
-    MAP_Timer_A_initCompare(TIMER_A0_BASE, &compareConfig_PWM);
-
-    Init_I2C_GPIO();
-    I2C_init();
-
-    OPT3001_init();
-
-    __delay_cycles(100000);
-}
-
-void configureMic()
-{
-    Timer_A_PWMConfig pwmConfig =
-    {
-        TIMER_A_CLOCKSOURCE_SMCLK,
-        TIMER_A_CLOCKSOURCE_DIVIDER_1,
-        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY),
-        TIMER_A_CAPTURECOMPARE_REGISTER_1,
-        TIMER_A_OUTPUTMODE_SET_RESET,
-        (SMCLK_FREQUENCY / SAMPLE_FREQUENCY) / 2
-    };
-
-    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN3,
-                                                       GPIO_TERTIARY_MODULE_FUNCTION);
 }

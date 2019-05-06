@@ -23,10 +23,10 @@ void draw_black_circle_fill(Graphics_Context g_sContext, int BPM)
     char string1[3];
 
     Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
-    Graphics_fillCircle(&g_sContext, 64, 64, 10);
     Graphics_drawString(&g_sContext,(int8_t*) "BPM:", -1, 40, 10, true);
     make_3digit_NumString(BPM, string1);
     Graphics_drawString(&g_sContext,(int8_t*)string1, -1, 75, 10, true);
+    Graphics_fillCircle(&g_sContext, 64, 64, 10);
 
 }
 
@@ -60,6 +60,12 @@ void note_detection_header_black( Graphics_Context g_sContext)
 
 void display_note_detection_black(Graphics_Context g_sContext, int maxIndex)
 {
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+    Graphics_Rectangle Rec = { 20, 30, 128, 50 };
+    Graphics_fillRectangle(&g_sContext, &Rec);
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
+
+
     if((maxIndex > 10) && (maxIndex <= 29))
     {
         Graphics_drawString(&g_sContext,(int8_t*) "A0", -1, 20, 30, true);
@@ -152,33 +158,149 @@ void display_note_detection_black(Graphics_Context g_sContext, int maxIndex)
     {
         Graphics_drawString(&g_sContext,(int8_t*) "B3", -1, 20, 30, true);
     }
-    else if((maxIndex >= 250) && (maxIndex < 265))
+     if((maxIndex>259) && (maxIndex<276))
     {
-        Graphics_drawString(&g_sContext,(int8_t*) "C4", -1, 20, 30, true);
+      Graphics_drawString(&g_sContext,(int8_t*) "C4", -1, 20, 30, true);
     }
-    else if((maxIndex >= 265) && (maxIndex < 300))
+    else if((maxIndex>=276)&&(maxIndex<279))
     {
-        Graphics_drawString(&g_sContext,(int8_t*) "D4", -1, 20, 30, true);
+      Graphics_drawString(&g_sContext,(int8_t*) "C#4", -1, 20, 30, true);
     }
-    else if((maxIndex >= 300) && (maxIndex < 335))
+    else if((maxIndex>=279)&&(maxIndex<295))
     {
-        Graphics_drawString(&g_sContext,(int8_t*) "E4", -1, 20, 30, true);
+      Graphics_drawString(&g_sContext,(int8_t*) "D4", -1, 20, 30, true);
     }
-    else if((maxIndex >= 335) && (maxIndex < 355))
+    else if((maxIndex>=295)&&(maxIndex<314))
     {
-        Graphics_drawString(&g_sContext,(int8_t*) "F4", -1, 20, 30, true);
+      Graphics_drawString(&g_sContext,(int8_t*) "D#4", -1, 20, 30, true);
     }
-    else if((maxIndex >= 355) && (maxIndex < 400))
+    else if((maxIndex>=314)&&(maxIndex<331))
     {
-        Graphics_drawString(&g_sContext,(int8_t*) "G4", -1, 20, 30, true);
+      Graphics_drawString(&g_sContext,(int8_t*) "E4", -1, 20, 30, true);
     }
-    else if((maxIndex >= 400) && (maxIndex < 450))
+    else if((maxIndex>=331)&&(maxIndex<351))
     {
-        Graphics_drawString(&g_sContext,(int8_t*) "A4", -1, 20, 30, true);
+      Graphics_drawString(&g_sContext,(int8_t*) "F4", -1, 20, 30, true);
     }
-    else if((maxIndex >= 450) && (maxIndex < 500))
+    else if((maxIndex>=351)&&(maxIndex<371))
     {
-        Graphics_drawString(&g_sContext,(int8_t*) "B4", -1, 20, 30, true);
+      Graphics_drawString(&g_sContext,(int8_t*) "F#4", -1, 20, 30, true);
+    }
+    else if((maxIndex>=371)&&(maxIndex<393))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "G4", -1, 20, 30, true);
+    }
+    else if((maxIndex>=393)&&(maxIndex<417))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "G#4", -1, 20, 30, true);
+    }
+    else if((maxIndex>=417)&&(maxIndex<452))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "A4", -1, 20, 30, true);
+    }
+    else if((maxIndex>=452)&&(maxIndex<468))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "A#4", -1, 20, 30, true);
+    }
+    else if((maxIndex>=468)&&(maxIndex<495))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "B4", -1, 20, 30, true);
+    }
+    else if((maxIndex>=495)&&(maxIndex<525))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "C5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=525)&&(maxIndex<556))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "C#5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=556)&&(maxIndex<589))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "D5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=589)&&(maxIndex<624))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "D#5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=624)&&(maxIndex<661))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "E5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=661)&&(maxIndex<700))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "F5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=700)&&(maxIndex<741))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "F#5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=741)&&(maxIndex<785))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "G5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=785)&&(maxIndex<832))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "G#5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=832)&&(maxIndex<880))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "A5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=880)&&(maxIndex<934))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "A#5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=934)&&(maxIndex<989))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "B5", -1, 20, 30, true);
+    }
+    else if((maxIndex>=989)&&(maxIndex<1048))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "C6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1048)&&(maxIndex<1110))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "C#6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1110)&&(maxIndex<1176))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "D6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1176)&&(maxIndex<1246))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "D#6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1246)&&(maxIndex<1320))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "E6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1320)&&(maxIndex<1398))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "F6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1398)&&(maxIndex<1481))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "F#6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1481)&&(maxIndex<1569))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "G6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1569)&&(maxIndex<1663))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "G#6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1663)&&(maxIndex<1762))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "A6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1762)&&(maxIndex<1866))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "A#6", -1, 20, 30, true);
+    }
+    else if((maxIndex>=1866)&&(maxIndex<1976))
+    {
+      Graphics_drawString(&g_sContext,(int8_t*) "B6", -1, 20, 30, true);
     }
 }
 
@@ -189,7 +311,6 @@ void FFT_display_black(Graphics_Context g_sContext)
 
 
     GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
-
     Graphics_drawLineH(&g_sContext, 0, 127, 115);
     Graphics_drawLineV(&g_sContext, 0, 115, 117);
     Graphics_drawLineV(&g_sContext, 16, 115, 116);
@@ -205,7 +326,7 @@ void FFT_display_black(Graphics_Context g_sContext)
     Graphics_drawLineV(&g_sContext, 127, 115, 117);
 
     Graphics_drawStringCentered(&g_sContext,
-                                (int8_t *)"512-Point FFT",
+                                (int8_t *)"2048-Point FFT",
                                 AUTO_STRING_LENGTH,
                                 64,
                                 6,
@@ -279,7 +400,6 @@ void FFT_display_white(Graphics_Context g_sContext)
 
 
         GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
-
         Graphics_drawLineH(&g_sContext, 0, 127, 115);
         Graphics_drawLineV(&g_sContext, 0, 115, 117);
         Graphics_drawLineV(&g_sContext, 16, 115, 116);
@@ -295,7 +415,7 @@ void FFT_display_white(Graphics_Context g_sContext)
         Graphics_drawLineV(&g_sContext, 127, 115, 117);
 
         Graphics_drawStringCentered(&g_sContext,
-                                    (int8_t *)"512-Point FFT",
+                                    (int8_t *)"2048-Point FFT",
                                     AUTO_STRING_LENGTH,
                                     64,
                                     6,

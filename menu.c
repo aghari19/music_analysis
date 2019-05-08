@@ -89,14 +89,29 @@ button_t BoostS2 = {GPIO_PORT_P3, GPIO_PIN5, Stable_R, RELEASED_STATE, TIMER32_1
 button_t LaunchL = {GPIO_PORT_P1, GPIO_PIN1, Stable_R, RELEASED_STATE, TIMER32_0_BASE};
 button_t LaunchR = {GPIO_PORT_P1, GPIO_PIN4, Stable_R, RELEASED_STATE, TIMER32_1_BASE};
 
-
+//This method executes the metronome algorithm
 void metronome_play(bool Booster1_Pressed,bool Booster2_Pressed);
+
+//This method convert a number to a 3 digit string
 void make_3digit_NumString(unsigned int num, char *string);
+
+//This method executes functionality of the FFT
 void FFT_play(bool issensor);
+
+//This method executes the note_detection
 void note_detection_play(bool islight);
+
+//This method takes the maxIndex value from the note_detection_play and compares with with different
+//frequency bandwidth. When the if condition is staisfied the corresponding note is displyed
 void tone_frequency(int maxIndex, bool islight);
+
+//This method initializes the FFT
 void initial(bool issensor);
+
+//This method initializes the FFT for the note_detection
 void initial_note();
+
+//This method initializes the light sensor
 void light_initial();
 
 /* Variable for storing lux value returned from OPT3001 */
@@ -197,14 +212,28 @@ void menu()
                 configureMic();
                 second = true;
                 option = note_detection;
-                draw_white_rec(g_sContext);
+                if (islight)
+                {
+                    draw_white_rec(g_sContext);
+                }
+                else
+                {
+                    draw_black_rec(g_sContext);
+                }
             }
             else if(LaunchR_Pressed)
             {
                 Timer_A_stopTimer(TIMER_A0_BASE);
                 configureMic();
                 option = FFT;
-                draw_white_rec(g_sContext);
+                if(islight)
+                {
+                    draw_white_rec(g_sContext);
+                }
+                else
+                {
+                    draw_black_rec(g_sContext);
+                }
                 first = true;
             }
             break;
@@ -220,13 +249,27 @@ void menu()
             {
                 option = FFT;
                 configureMic();
-                draw_white_rec(g_sContext);
+                if(islight)
+                {
+                    draw_white_rec(g_sContext);
+                }
+                else
+                {
+                    draw_black_rec(g_sContext);
+                }
                 first = true;
             }
             else if(LaunchR_Pressed)
             {
                 option = metronome;
-                draw_white_rec(g_sContext);
+                if(islight)
+                {
+                    draw_white_rec(g_sContext);
+                }
+                else
+                {
+                    draw_black_rec(g_sContext);
+                }
             }
             break;
     }
@@ -236,7 +279,7 @@ void note_detection_play(bool islight)
 {
     static bool prev = false;
     lux = OPT3001_getLux();
-    if(lux<=10)
+    if(lux<=5)
     {
         islight = false;
     }
@@ -463,26 +506,26 @@ void tone_frequency(int Index, bool islight)
     else if ((maxIndex > 340) && (maxIndex <= 355))
     {
         Graphics_drawString(&g_sContext, (int8_t*) "F4", -1, 50, 30, true);
-        if ((maxIndex >= 340) && (maxIndex <= 346))
+        if ((maxIndex >= 340) && (maxIndex <= 345))
         {
             Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
             true);
         }
-        else if ((maxIndex > 346) && (maxIndex <= 353))
+        else if ((maxIndex > 345) && (maxIndex <= 355))
         {
             Graphics_drawString(&g_sContext, (int8_t*) "TUNE", -1, 50, 70,
             true);
         }
-        else if ((maxIndex > 353) && (maxIndex <= 355))
+        else if ((maxIndex > 355) && (maxIndex <= 357))
         {
             Graphics_drawString(&g_sContext, (int8_t*) "SHARP", -1, 50, 90,
             true);
         }
     }
-    else if ((maxIndex > 355) && (maxIndex <= 380))
+    else if ((maxIndex > 357) && (maxIndex <= 380))
     {
         Graphics_drawString(&g_sContext, (int8_t*) "F#4", -1, 50, 30, true);
-        if ((maxIndex >= 355) && (maxIndex <= 363))
+        if ((maxIndex >= 357) && (maxIndex <= 363))
         {
             Graphics_drawString(&g_sContext, (int8_t*) "FLAT", -1, 50, 50,
             true);

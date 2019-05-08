@@ -2,8 +2,10 @@
 #include "ButtonLED_HAL.h"
 #include "Timer.h"
 
-
+//The Menu method executed the functionality of the project with the help of a FSM
 void menu();
+
+//This method initializes the two hardware Timers
 void initialization();
 
 int main(void)
